@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego del Ahorcado - Edición Global</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .figure-part { 
+            display: none; 
+            stroke: #ef4444; /* Rojo Tailwind */
+            stroke-width: 4; 
+            stroke-linecap: round; 
+            fill: none;
+            transition: all 0.3s ease-in-out;
+        }
+        .show { display: block; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center py-10">
+
+    <div class="container mx-auto px-4 max-w-3xl flex flex-col items-center">
+        <h1 class="text-4xl md:text-5xl font-bold mb-2 text-blue-400 text-center">Ahorcado Global</h1>
+        <p class="text-gray-400 mb-8 text-center">Adivina continentes, países, océanos y maravillas naturales</p>
+
+        <!-- Contenedor del Dibujo SVG -->
+        <div class="mb-8 bg-gray-800 p-6 rounded-xl shadow-2xl border border-gray-700">
+            <svg height="250" width="200" class="text-gray-300">
+                <!-- Base y Poste (Siempre visibles) -->
+                <line x1="20" y1="240" x2="100" y2="240" stroke="currentColor" stroke-width="4"/>
+                <line x1="60" y1="240" x2="60" y2="20" stroke="currentColor" stroke-width="4"/>
+                <line x1="60" y1="20" x2="140" y2="20" stroke="currentColor" stroke-width="4"/>
+                <line x1="140" y1="20" x2="140" y2="50" stroke="currentColor" stroke-width="4"/>
+
+                <!-- Partes del cuerpo (Se revelan con errores) -->
+                <circle cx="140" cy="75" r="20" class="figure-part" id="part-1"/> <!-- Cabeza -->
+                <line x1="140" y1="95" x2="140" y2="160" class="figure-part" id="part-2"/> <!-- Cuerpo -->
+                <line x1="140" y1="110" x2="110" y2="140" class="figure-part" id="part-3"/> <!-- Brazo Izquierdo -->
+                <line x1="140" y1="110" x2="170" y2="140" class="figure-part" id="part-4"/> <!-- Brazo Derecho -->
+                <line x1="140" y1="160" x2="110" y2="210" class="figure-part" id="part-5"/> <!-- Pierna Izquierda -->
+                <line x1="140" y1="160" x2="170" y2="210" class="figure-part" id="part-6"/> <!-- Pierna Derecha -->
+            </svg>
+        </div>
+
+        <!-- Palabras a adivinar -->
+        <div id="word-display" class="flex flex-wrap gap-2 sm:gap-4 justify-center mb-8 text-3xl sm:text-4xl font-mono uppercase tracking-widest min-h-[50px]">
+            <!-- Las letras se inyectan aquí -->
+        </div>
+
+        <!-- Mensajes y Controles -->
+        <div class="h-16 flex flex-col items-center justify-center mb-4">
+            <p id="message" class="text-2xl font-bold text-center"></p>
+            <button id="restart-btn" class="hidden mt-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg transition-transform transform hover:scale-105">
+                Jugar de Nuevo
+            </button>
+        </div>
+
+        <!-- Teclado Virtual -->
+        <div id="keyboard" class="flex flex-wrap gap-2 justify-center max-w-2xl w-full">
+            <!-- Los botones se inyectan aquí -->
+        </div>
+    </div>
+
+    <script>
+        // Lista de palabras globalizadas
+        const words = [
+            "AMAZONAS", "TOKIO", "ATLANTICO", "AUSTRALIA", "EUROPA", 
+            "EVEREST", "PACIFICO", "SAHARA", "MADAGASCAR", "ANTARTIDA", 
+            "PARIS", "LONDRES", "HIMALAYA", "NILO", "GROENLANDIA",
+            "MEDITERRANEO", "ANDES", "BERLIN", "ROMA", "PEKIN"
+        ];
+
+        // Configuración de la cola FIFO para evitar repeticiones
+        const COOLDOWN = 5; // Número de partidas antes de que una palabra pueda repetirse
+        let recentWords = [];
+
+        // Estado de la partida
+        let selectedWord = "";
+        let guessedLetters = new Set();
+        let mistakes = 0;
+        const maxMistakes = 6;
+
+        // Referencias al DOM
+        const wordDisplay = document.getElementById("word-display");
+        const keyboard = document.getElementById("keyboard");
+        const message = document.getElementById("message");
+        const restartBtn = document.getElementById("restart-btn");
+        const figureParts = document.querySelectorAll(".figure-part");
+
+        function getNextWord() {
+            // Filtrar palabras que no estén en el historial reciente
+            const availableWords = words.filter(word => !recentWords.includes(word));
+            
+            // Elegir una al azar de las disponibles
+            const chosen = availableWords[Math.floor(Math.random() * availableWords.length)];
+            
+            // Actualizar la cola FIFO (añadir al final y sacar la más antigua si supera el límite)
+            recentWords.push(chosen);
+            if (recentWords.length > COOLDOWN) {
+                recentWords.shift();
+            }
+            
+            return chosen;
+        }
+
+        function initGame() {
+            // Seleccionar palabra usando la cola FIFO
+            selectedWord = getNextWord();
+            guessedLetters.clear();
+            mistakes = 0;
+            
+            // Reiniciar UI
+            message.textContent = "";
+            message.className = "text-2xl font-bold text-center"; 
+            restartBtn.classList.add("hidden");
+            figureParts.forEach(part => part.classList.remove("show"));
+            
+            renderWord();
+            renderKeyboard();
+        }
+
+        function renderWord() {
+            wordDisplay.innerHTML = "";
+            selectedWord.split("").forEach(letter => {
+                const span = document.createElement("span");
+                span.className = "border-b-4 border-gray-400 w-8 sm:w-12 text-center inline-block pb-1 text-white";
+                span.textContent = guessedLetters.has(letter) ? letter : "";
+                wordDisplay.appendChild(span);
+            });
+        }
+
+        function renderKeyboard() {
+            keyboard.innerHTML = "";
+            const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split("");
+            
+            letters.forEach(letter => {
+                const btn = document.createElement("button");
+                btn.textContent = letter;
+                btn.className = "w-10 h-12 sm:w-12 sm:h-14 bg-gray-700 hover:bg-gray-600 rounded-lg text-lg sm:text-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow";
+                btn.id = `key-${letter}`;
+                
+                btn.onclick = () => handleGuess(letter);
+                keyboard.appendChild(btn);
+            });
+        }
+
+        function handleGuess(letter) {
+            // Prevenir jugadas si la letra ya se usó o el juego terminó
+            if (guessedLetters.has(letter) || mistakes >= maxMistakes || checkWin()) return;
+            
+            guessedLetters.add(letter);
+            const btn = document.getElementById(`key-${letter}`);
+            
+            if (selectedWord.includes(letter)) {
+                // Acierto: Verde
+                btn.classList.remove("bg-gray-700", "hover:bg-gray-600");
+                btn.classList.add("bg-emerald-600", "text-white", "border-emerald-700");
+            } else {
+                // Fallo: Rojo y dibujar parte del ahorcado
+                mistakes++;
+                btn.classList.remove("bg-gray-700", "hover:bg-gray-600");
+                btn.classList.add("bg-red-600", "text-white");
+                
+                if (mistakes <= maxMistakes) {
+                    document.getElementById(`part-${mistakes}`).classList.add("show");
+                }
+            }
+            
+            btn.disabled = true;
+            renderWord();
+            checkWinOrLose();
+        }
+
+        function checkWin() {
+            return selectedWord.split("").every(letter => guessedLetters.has(letter));
+        }
+
+        function checkWinOrLose() {
+            if (checkWin()) {
+                message.textContent = "¡Felicidades! Has salvado la vida. 🎉";
+                message.classList.add("text-emerald-400");
+                endGame();
+            } else if (mistakes === maxMistakes) {
+                message.textContent = `¡Fin del juego! La palabra era: ${selectedWord}`;
+                message.classList.add("text-red-400");
+                
+                // Mostrar las letras faltantes en rojo
+                const spans = wordDisplay.querySelectorAll("span");
+                selectedWord.split("").forEach((letter, index) => {
+                    if (!guessedLetters.has(letter)) {
+                        spans[index].textContent = letter;
+                        spans[index].classList.add("text-red-500");
+                    }
+                });
+                endGame();
+            }
+        }
+
+        function endGame() {
+            // Deshabilitar todo el teclado
+            const keys = keyboard.querySelectorAll("button");
+            keys.forEach(key => key.disabled = true);
+            restartBtn.classList.remove("hidden");
+        }
+
+        // Listener para el botón de reiniciar
+        restartBtn.addEventListener("click", initGame);
+
+        // Soporte para teclado físico
+        window.addEventListener("keydown", e => {
+            const key = e.key.toUpperCase();
+            if (/^[A-ZÑ]$/.test(key) && mistakes < maxMistakes && !checkWin()) {
+                handleGuess(key);
+            } 
+            else if (e.key === "Enter" && !restartBtn.classList.contains("hidden")) {
+                initGame();
+            }
+        });
+
+        // Iniciar el primer juego al cargar
+        initGame();
+    </script>
+</body>
+</html>
